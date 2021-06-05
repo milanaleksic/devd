@@ -18,13 +18,13 @@ import (
 	rice "github.com/GeertJohan/go.rice"
 	"github.com/goji/httpauth"
 
+	"github.com/cortesi/termlog"
 	"github.com/milanaleksic/devd/httpctx"
 	"github.com/milanaleksic/devd/inject"
 	"github.com/milanaleksic/devd/livereload"
 	"github.com/milanaleksic/devd/ricetemp"
 	"github.com/milanaleksic/devd/slowdown"
 	"github.com/milanaleksic/devd/timer"
-	"github.com/cortesi/termlog"
 )
 
 const (
@@ -171,9 +171,13 @@ func (dd *Devd) WrapHandler(log termlog.TermLog, next httpctx.Handler) http.Hand
 		revertOriginalHost(r)
 		timr := timer.Timer{}
 		sublog := log.Group()
+		dpath := r.RequestURI
+		ignored := IsIgnored(dpath)
 		defer func() {
-			timing := termlog.DefaultPalette.Timestamp.SprintFunc()("timing: ")
-			sublog.SayAs("timer", timing+timr.String())
+			if !ignored {
+				timing := termlog.DefaultPalette.Timestamp.SprintFunc()("timing: ")
+				sublog.SayAs("timer", timing+timr.String())
+			}
 			sublog.Done()
 		}()
 		if matchStringAny(dd.IgnoreLogs, fmt.Sprintf("%s%s", r.URL.Host, r.RequestURI)) {
@@ -182,11 +186,12 @@ func (dd *Devd) WrapHandler(log termlog.TermLog, next httpctx.Handler) http.Hand
 		timr.RequestHeaders()
 		time.Sleep(time.Millisecond * time.Duration(dd.Latency))
 
-		dpath := r.RequestURI
 		if !strings.HasPrefix(dpath, "/") {
 			dpath = "/" + dpath
 		}
-		sublog.Say("%s %s", r.Method, dpath)
+		if !ignored {
+			sublog.Say("%s %s", r.Method, dpath)
+		}
 		LogHeader(sublog, r.Header)
 		ctx := timr.NewContext(context.Background())
 		ctx = termlog.NewContext(ctx, sublog)
@@ -215,7 +220,7 @@ func (dd *Devd) WrapHandler(log termlog.TermLog, next httpctx.Handler) http.Hand
 		flusher, _ := w.(http.Flusher)
 		next.ServeHTTPContext(
 			ctx,
-			&ResponseLogWriter{Log: sublog, Resp: w, Flusher: flusher, Timer: &timr},
+			&ResponseLogWriter{Log: sublog, Resp: w, Flusher: flusher, Timer: &timr, IsIgnored: ignored},
 			r,
 		)
 	})

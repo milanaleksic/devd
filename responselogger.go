@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/milanaleksic/devd/timer"
 	"github.com/cortesi/termlog"
 	"github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/milanaleksic/devd/timer"
 )
 
 // ResponseLogWriter is a ResponseWriter that logs
@@ -18,6 +18,7 @@ type ResponseLogWriter struct {
 	Flusher     http.Flusher
 	Timer       *timer.Timer
 	wroteHeader bool
+	IsIgnored   bool
 }
 
 func (rl *ResponseLogWriter) logCode(code int, status string) {
@@ -44,7 +45,9 @@ func (rl *ResponseLogWriter) logCode(code int, status string) {
 			clstr = fmt.Sprintf("%s", humanize.Bytes(uint64(cli)))
 		}
 	}
-	rl.Log.Say("<- %s %s", codestr, clstr)
+	if !rl.IsIgnored {
+		rl.Log.Say("<- %s %s", codestr, clstr)
+	}
 }
 
 // Header returns the header map that will be sent by WriteHeader.
@@ -75,7 +78,6 @@ func (rl *ResponseLogWriter) Write(data []byte) (int, error) {
 // send error codes.
 func (rl *ResponseLogWriter) WriteHeader(code int) {
 	rl.wroteHeader = true
-	rl.logCode(code, http.StatusText(code))
 	LogHeader(rl.Log, rl.Resp.Header())
 	rl.Timer.ResponseHeaders()
 	rl.Resp.WriteHeader(code)
