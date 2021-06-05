@@ -78,7 +78,9 @@ func (rl *ResponseLogWriter) Write(data []byte) (int, error) {
 // send error codes.
 func (rl *ResponseLogWriter) WriteHeader(code int) {
 	rl.wroteHeader = true
-	rl.logCode(code, http.StatusText(code))
+	if !rl.IsIgnored {
+		rl.logCode(code, http.StatusText(code))
+	}
 	LogHeader(rl.Log, rl.Resp.Header())
 	rl.Timer.ResponseHeaders()
 	rl.Resp.WriteHeader(code)
